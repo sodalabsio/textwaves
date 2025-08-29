@@ -1,4 +1,4 @@
-data/
+synthetic_data/
 outputs/
 myvenv/
 .env
