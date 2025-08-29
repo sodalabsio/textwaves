@@ -259,5 +259,27 @@ Notes:
 
 ## License
 
+MIT.
+
 ## To cite
+
+If you fork/apply this repository for your research, please cite as:
+
+Bibtex:
+
+```latex
+@misc{angus2025textwaves,
+  author = {Angus, SD},
+  title = {TextWaves: simple NLP analysis on a tiny synthetic dataset},
+  year = {2025},
+  url = {https://github.com/sodalabsio/textwaves},
+  note = {GitHub repository}
+}
+```
+
+APA:
+
+```text
+Angus, S. (2025). TextWaves: simple NLP analysis on a tiny synthetic dataset [Computer software]. GitHub. https://github.com/sodalabsio/textwaves
+```
 
