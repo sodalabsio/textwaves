@@ -1,0 +1,13 @@
+numpy
+pandas
+scikit-learn
+scipy
+matplotlib
+seaborn
+umap-learn
+tqdm
+python-dotenv
+gensim
+openai>=1.40.0
+sentence-transformers
+pyyaml
