@@ -28,3 +28,7 @@ reduce:
   method: umap        # honored unless overridden by --reduce
   n_components: 2     # used by both UMAP and PCA
   n_neighbors: 10     # UMAP only
+
+llm_label:
+  model: gpt-4.1-nano-2025-04-14
+  prompt_style: zero   # options: zero, extended

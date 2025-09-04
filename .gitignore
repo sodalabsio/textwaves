@@ -3,3 +3,5 @@ outputs/
 myvenv/
 .env
 __pycache__/
+*.csv
+todo.md

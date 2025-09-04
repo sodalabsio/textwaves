@@ -1,9 +1,10 @@
 import os
-from typing import Tuple
+from typing import Tuple, Optional, Dict
 import pandas as pd
 from sklearn.model_selection import StratifiedShuffleSplit
 from .generate_synthetic import generate as generate_lex, save_csv as save_csv_lex
 from .generate_synthetic_llm import generate_llm, save_csv as save_csv_llm
+from .byod import load_byod_csv as _load_byod_csv
 
 
 def load_or_generate(n_per_class: int, start: str, end: str, add_label_noise: bool,
@@ -27,6 +28,16 @@ def load_or_generate_llm(n_per_class: int, start: str, end: str, add_label_noise
         save_csv_llm(df, path)
         return df
     return pd.read_csv(path, parse_dates=['timestamp'])
+
+
+def load_byod(path: str,
+              text_col: str = 'text',
+              label_col: Optional[str] = None,
+              timestamp_col: Optional[str] = None,
+              label_rename: Optional[Dict[str, str]] = None) -> pd.DataFrame:
+    """Thin wrapper over data.byod to keep a single import path for callers."""
+    return _load_byod_csv(path, text_col=text_col, label_col=label_col,
+                          timestamp_col=timestamp_col, label_rename=label_rename)
 
 
 def stratified_split(df: pd.DataFrame, test_size: float = 0.3, seed: int = 42) -> Tuple[pd.Index, pd.Index]:
