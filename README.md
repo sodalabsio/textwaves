@@ -6,6 +6,9 @@
 
 Please fork to begin your project -- if using these tools for academic work, please cite as below.
 
+📝 For more context around the text-as-data problem and applying these NLP 'waves' in a social-science context (i.e. narratives of democratic resilience) see: [Angus, SD: "Tracking Policy-relevant Narratives of Democratic Resilience at Scale: from experts and machines, to AI & the transformer revolution" - SoDa Laboratories Working Paper 2024-07](https://ideas.repec.org/p/ajr/sodwps/2024-07.html)
+
+
 ## TL;DR
 Lean, hands-on repo to demonstrate three representation “waves” for text-as-data in social science, plus optional LLM-labelling, accompanying workshops/talks at U Greenwich, LDN, Sep 1–2 2025 — _Methods in Social Change and Inertia Workshops_.
 
@@ -32,7 +35,7 @@ You’re comfortable running a few terminal commands, have basic Python familiar
 
 1) Install Python 3.10+
 
-2) Create/activate a virtual environment and install deps
+2) Create/activate a virtual environment and install dependencies. (💡 You don't need to do this -- you may have the required packages already available on your system -- but it's best practice to isolate dependencies per project, and will assist with reproducibility.)
 
    ```bash
    python -m venv myvenv
@@ -40,7 +43,7 @@ You’re comfortable running a few terminal commands, have basic Python familiar
    pip install -r requirements.txt
    ```
 
-3) (Optional) Add an OpenAI API key for OpenAI embeddings, LLM data synthesis and LLM labelling
+3) (Optional) Add an OpenAI API key for OpenAI embeddings, LLM data synthesis and LLM labelling. (💡If you are new to 'keys', then Google "open ai key about"; and/or head to https://platform.openai.com to create/sign-in to the API platform and generate a key: click 'gear' icon for settings > API Keys (menu at left).)
 
    - Copy `.env.example` to `.env` and set `OPENAI_API_KEY=...`
    - No key? The pipeline still runs end-to-end:
@@ -61,7 +64,7 @@ You’re comfortable running a few terminal commands, have basic Python familiar
    python -m src.cli.build_all --include-llm
    ```
 
-   Few-shot LLM labelling instead (uses in-repo examples):
+   Few-shot LLM labelling instead (uses in-repo examples to guide the model):
 
    ```bash
    python -m src.cli.build_all --include-llm --llm-prompt-style extended
@@ -71,7 +74,7 @@ You’re comfortable running a few terminal commands, have basic Python familiar
 
    ```bash
    python -m src.cli.build_all --data-source llm ...
-  ```
+   ```
 
 5) Visualise the results
 
@@ -102,19 +105,23 @@ That’s it. You now have:
 ---
 
 ## ⚙ Pipeline approach (what’s happening under the hood)
-The pipeline has five components you can mix and match:
+The pipeline has five/six components you can mix and match:
 
-1. **Synthesise — tiny dataset (default 300 texts, 3 topics) using a lexicon or an LLM. Texts are timestamped so class prevalence ebbs/flows over time.
+1. **Synthesise** — tiny dataset (default 300 texts, 3 topics) using a lexicon or an LLM. Texts are timestamped so class prevalence ebbs/flows over time.
 
 2. **Vectorise** — TF‑IDF, GloVe, or transformer-based embeddings (OpenAI with SBERT fallback).
 
 3. **Cluster and reduce** — cluster (KMeans) and reduce to 2D (UMAP/PCA) for intuition and visualisation.
 
-4. **Train / predict** — logistic regression trained on the earliest slice of data (temporal split) and evaluated on future texts.
+4. **Train / predict** — logistic regression trained on the vectors of the earliest slice of data (temporal split) and evaluated on the vectors of "future" texts.
 
-5. **Compare** — a unified results CSV with clustering metrics and classification metrics, plus optional LLM labelling metrics.
+5. **Direct LLM labelling** (optional) — zero-shot or few-shot labelling of texts by an LLM, compared to ground-truth labels.
+
+6. **Compare** — a unified results CSV with clustering metrics and classification metrics, plus optional LLM labelling metrics.
 
 Together these mirror common text-as-data workflows for computational social science and are easy to adapt to your own data.
+
+💡 The idea is to allow you to see the strengths/weaknesses of different semantic representations (TF‑IDF, GloVe, LLM embeddings) of ecological texts on a simple, labelled dataset where you can control the data-generating process. You can also optionally compare to a direct LLM labelling process, either in 'zero-shot' (no examples, rely on model's world knowledge) or 'few-shot' (small in-repo examples per class) modes. These ideas are discussed in more detail in the paper referenced above.
 
 ## Generate data explicitly (optional)
 You can regenerate the synthetic data without running a full method:
@@ -307,6 +314,10 @@ For convenience, the built-in BYOD loader (`src/data/byod.py`) already handles t
 
 ## License
 MIT.
+
+## Acknowledgement
+
+This repo was developed in AI-augmented collaboration with SoDa Laboratory's incredible [Assistant AI](assistant.sodalabs.io) platform, spearheaded and engineered by SoDa's AI Research Lead, [Lachlan O'Neill](https://research.monash.edu/en/persons/lachlan-oneill).
 
 ## To cite
 If you fork/apply this repository for your research, please cite as:
