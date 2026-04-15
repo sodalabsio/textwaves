@@ -92,7 +92,7 @@ You’re comfortable running a few terminal commands, have basic Python familiar
 
    ```bash
    python -m src.cli.run_pipeline --method tfidf --data-source lexicon \
-       --plot-scatter --plot-timeseries --plot-future
+       --plot-scatter --plot-scatter-true-only --plot-timeseries --plot-future
    ```
 
 That’s it. You now have:
@@ -164,8 +164,13 @@ You have two simple ways to get the nice visuals.
 
 ```bash
 python -m src.cli.run_pipeline --method tfidf --data-source lexicon \
-    --plot-scatter --plot-timeseries --plot-future
+    --plot-scatter --plot-scatter-true-only --plot-timeseries --plot-future
 ```
+
+Here the two scatter variants are:
+
+- `--plot-scatter`: colour by true label, marker by cluster
+- `--plot-scatter-true-only`: colour and marker both by true label, ignoring clusters entirely
 
 2) Later, without recomputing, from cached outputs:
 
@@ -173,7 +178,8 @@ python -m src.cli.run_pipeline --method tfidf --data-source lexicon \
 # After any prior run for a given (data_source, method)
 # Uses outputs/cache/last_{data_source}_{method}.npz
 python -m src.cli.plot_cached --what timeseries --data-source lexicon     # - no method required, just plots synthetic data timeseries
-python -m src.cli.plot_cached --what scatter --data-source lexicon --method tfidf  # -- scatter of lowD vectors
+python -m src.cli.plot_cached --what scatter --data-source lexicon --method tfidf  # -- scatter of lowD vectors, colour=true label / marker=cluster
+python -m src.cli.plot_cached --what scatter-true-only --data-source lexicon --method tfidf  # -- scatter of lowD vectors using only true labels
 python -m src.cli.plot_cached --what future --data-source lexicon --method tfidf   # -- future label predictions vs. groundtruth
 
 # Or point to a specific cache (e.g., run_<hash>.npz)
@@ -199,7 +205,7 @@ python -m src.cli.run_pipeline \
   --byod-label-col stance \
   --byod-timestamp-col posted_at \
   --method tfidf \
-  --plot-scatter --plot-timeseries
+  --plot-scatter --plot-scatter-true-only --plot-timeseries
 
 # Unlabeled data (clustering + visuals still work)
 python -m src.cli.run_pipeline \
@@ -211,6 +217,7 @@ python -m src.cli.run_pipeline \
 
 # Later, plot from cache without recomputing
 python -m src.cli.plot_cached --what scatter --data-source byod --method glove
+python -m src.cli.plot_cached --what scatter-true-only --data-source byod --method glove
 ```
 
 Under the hood this uses `src/data/byod.py` to normalize your CSV to the standard schema: `text`, `label_name`, `label` (int-coded), `timestamp`.
@@ -226,6 +233,7 @@ Under the hood this uses `src/data/byod.py` to normalize your CSV to the standar
 
 - Visualisations (optional, either on-the-fly or from cache):
   - `outputs/figures/scatter_{method}_{data}.png`
+  - `outputs/figures/scatter_true_only_{method}_{data}.png`
   - `outputs/figures/timeseries_{method}_{data}.png`
   - `outputs/figures/future_{method}_{data}.png`
 
@@ -304,6 +312,8 @@ Once you’re comfortable, adapt this as a swiss‑army‑knife starter:
 - Keep the same CLI shape so you can still run `build_all` and produce unified results/plots without changing your workflow.
 
 For convenience, the built-in BYOD loader (`src/data/byod.py`) already handles these cases via the CLI flags in the section above.
+
+Note: when you bring your own data, the pipeline will learn label names from your dataset (use the `--byod-label-col` flag to point to your label col). This matters for plotting. Note, the number of unique labels (+1) will be used for k-means clustering k value.
 
 ## What this repo shows
 - How representation choices affect cluster structure and downstream performance (TF‑IDF → GloVe → LLM embeddings).

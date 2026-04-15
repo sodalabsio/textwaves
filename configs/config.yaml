@@ -1,21 +1,21 @@
 random_seed: 42
 
 data:
-  n_per_class: 100
-  start: '2022-01-01'
-  end: '2024-12-31'
+  n_per_class: 50 
+  start: '2026-01-01'
+  end: '2026-03-31'
   add_label_noise: false
   noise_rate: 0.05
 
 vectorizers:
   tfidf:
-    min_df: 2
+    min_df: 5
     max_df: 0.95
     ngram_range: [1, 2]
   glove:
     model: glove-wiki-gigaword-50
   openai:
-    model: text-embedding-3-small
+    model: text-embedding-3-large
     batch_size: 128
   sbert:
     model: all-MiniLM-L6-v2

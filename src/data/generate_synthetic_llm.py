@@ -6,9 +6,11 @@ from typing import List, Dict, Optional, Tuple
 import numpy as np
 import pandas as pd
 
+# If creating your own LLM generator, update classes manually here.
+CLASSES = ['deep_democracy', 'mainstream_democracy', 'anti_democratic']
+
 # Reuse class names and time-series utilities from the lexicon generator
 from .generate_synthetic import (
-    CLASSES,
     _daily_range,
     _simulate_bias_curve,
     _class_probs_from_bias,

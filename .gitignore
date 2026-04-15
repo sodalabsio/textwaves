@@ -1,6 +1,7 @@
 synthetic_data/
 outputs/
 myvenv/
+myvenv-work/
 .env
 __pycache__/
 *.csv

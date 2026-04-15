@@ -6,20 +6,38 @@ import os
 import subprocess
 import sys
 import argparse
-import shutil
-import glob
 
 METHODS = ['tfidf', 'glove', 'sbert', 'openai']
 
+
 def synthetic_data_exists(data_source: str) -> bool:
     """Check if synthetic CSVs already exist for the given data source."""
-    if data_source == "llm":
-        pattern = "synthetic_data/synthetic_llm.csv"
+    if data_source == 'llm':
+        pattern = 'synthetic_data/synthetic_llm.csv'
     else:
-        pattern = "synthetic_data/synthetic.csv"
+        pattern = 'synthetic_data/synthetic.csv'
     return os.path.exists(pattern)
 
-def run_pipeline(method: str, data_source: str, train_frac: float, regen: bool = False):
+
+def _byod_args(data_source: str, byod_path: str | None, byod_text_col: str, byod_label_col: str | None,
+               byod_timestamp_col: str | None) -> list[str]:
+    if data_source != 'byod':
+        return []
+    if not byod_path:
+        raise ValueError('--byod-path is required when --data-source byod')
+
+    args = [
+        '--byod-path', byod_path,
+        '--byod-text-col', byod_text_col,
+    ]
+    if byod_label_col:
+        args.extend(['--byod-label-col', byod_label_col])
+    if byod_timestamp_col:
+        args.extend(['--byod-timestamp-col', byod_timestamp_col])
+    return args
+
+
+def run_pipeline(method: str, data_source: str, train_frac: float, regen: bool = False, extra_args: list[str] | None = None):
     cmd = [
         sys.executable, '-m', 'src.cli.run_pipeline',
         '--method', method,
@@ -30,9 +48,13 @@ def run_pipeline(method: str, data_source: str, train_frac: float, regen: bool =
     ]
     if regen:
         cmd.append('--regen-data')
+    if extra_args:
+        cmd.extend(extra_args)
     subprocess.check_call(cmd)
 
-def run_llm_label(data_source: str, prompt_style: str = "zero", regen_labels: bool = False):
+
+def run_llm_label(data_source: str, prompt_style: str = 'zero', regen_labels: bool = False,
+                  extra_args: list[str] | None = None):
     cmd = [
         sys.executable, '-m', 'src.cli.run_llm_label',
         '--data-source', data_source,
@@ -40,7 +62,10 @@ def run_llm_label(data_source: str, prompt_style: str = "zero", regen_labels: bo
     ]
     if regen_labels:
         cmd.append('--regen-labels')
+    if extra_args:
+        cmd.extend(extra_args)
     subprocess.check_call(cmd)
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -49,7 +74,7 @@ def main():
     )
     parser.add_argument(
         '--data-source',
-        choices=['lexicon', 'llm'],
+        choices=['lexicon', 'llm', 'byod'],
         default='lexicon',
         help='Which dataset source to use for all methods.'
     )
@@ -80,26 +105,54 @@ def main():
         action='store_true',
         help='Force regeneration of synthetic data even if CSVs already exist.'
     )
+
+    # BYOD options
+    parser.add_argument('--byod-path', type=str, default=None, help='Path to your CSV when --data-source byod')
+    parser.add_argument('--byod-text-col', type=str, default='text')
+    parser.add_argument('--byod-label-col', type=str, default=None)
+    parser.add_argument('--byod-timestamp-col', type=str, default=None)
+
     args = parser.parse_args()
 
-    # Decide whether to regenerate data
-    need_regen = args.regen_data or not synthetic_data_exists(args.data_source)
+    if args.data_source == 'byod' and not args.byod_path:
+        parser.error('For --data-source byod you must also provide --byod-path <your.csv>')
+    if args.data_source == 'byod' and args.regen_data:
+        parser.error('--regen-data is not applicable for --data-source byod')
+
+    extra_args = _byod_args(
+        args.data_source,
+        args.byod_path,
+        args.byod_text_col,
+        args.byod_label_col,
+        args.byod_timestamp_col,
+    )
+
+    need_regen = False if args.data_source == 'byod' else (args.regen_data or not synthetic_data_exists(args.data_source))
 
     for i, m in enumerate(METHODS):
-        # Only regenerate on the first run if needed
-        run_pipeline(m, data_source=args.data_source, train_frac=args.train_frac, regen=(i == 0 and need_regen))
+        run_pipeline(
+            m,
+            data_source=args.data_source,
+            train_frac=args.train_frac,
+            regen=(i == 0 and need_regen),
+            extra_args=extra_args,
+        )
 
-    # Optionally run LLM labelling
     if args.include_llm:
-        run_llm_label(args.data_source, prompt_style=args.llm_prompt_style, regen_labels=args.regen_labels)
+        run_llm_label(
+            args.data_source,
+            prompt_style=args.llm_prompt_style,
+            regen_labels=args.regen_labels,
+            extra_args=extra_args,
+        )
 
-    # Unified metrics file is already written by run_pipeline.py and run_llm_label.py
     metrics_path = os.path.join('outputs', 'tables', f'metrics_summary_{args.data_source}.csv')
 
     if os.path.exists(metrics_path):
         print(f'Summary written to {metrics_path}')
     else:
         print(f'Error: expected {metrics_path} not found.')
+
 
 if __name__ == '__main__':
     main()

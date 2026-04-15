@@ -21,7 +21,7 @@ from ..cluster.kmeans import kmeans as kmeans_fit
 from ..reduce.umap_ import to_2d as umap_to_2d
 from ..reduce.pca import to_2d as pca_to_2d
 from ..eval.metrics import cluster_metrics, best_mapping, supervised_scores
-from ..viz.scatter import scatter_2d
+from ..viz.scatter import scatter_2d, scatter_true_only_2d
 from ..viz.timeseries import plot_monthly_label_proportions, plot_future_reconstruction_by_class
 
 METHODS = {'tfidf', 'glove', 'openai', 'sbert'}
@@ -67,20 +67,40 @@ def _reduce(reduce: str, X: np.ndarray, cfg) -> np.ndarray:
     return pca_to_2d(X, n_components=rcfg.get('n_components', 2), seed=cfg['random_seed'])
 
 
-def _cluster(clusterer: str, X: np.ndarray, cfg) -> np.ndarray:
+def _cluster(clusterer: str, X: np.ndarray, cfg, k_override: int | None = None) -> np.ndarray:
     if clusterer == 'kmeans':
-        k = cfg['cluster']['k']
+        k = int(k_override if k_override is not None else cfg['cluster']['k'])
         labels, _ = kmeans_fit(X, k=k, seed=cfg['random_seed'])
         return labels
     raise ValueError('Unknown clusterer')
 
 
+def _resolved_cluster_k(data_source: str, df: pd.DataFrame, cfg) -> int:
+    configured_k = int(cfg['cluster']['k'])
+    if data_source != 'byod' or 'label_name' not in df.columns:
+        return configured_k
+
+    observed_labels = sorted({
+        str(x).strip() for x in df['label_name'].dropna().tolist()
+        if str(x).strip()
+    })
+
+    # If the BYOD dataset is genuinely labelled with more than one class,
+    # let the label set drive k so the rest of the pipeline adapts automatically.
+    # go with k+1
+    if len(observed_labels) > 1:
+        return len(observed_labels) + 1
+
+    # For unlabeled/single-label BYOD data, keep the configured clustering behaviour.
+    return configured_k
+
+
 def synthetic_data_exists(data_source: str) -> bool:
     """Check if synthetic CSVs already exist for the given data source."""
-    if data_source == "llm":
-        path = "synthetic_data/synthetic_llm.csv"
+    if data_source == 'llm':
+        path = 'synthetic_data/synthetic_llm.csv'
     else:
-        path = "synthetic_data/synthetic.csv"
+        path = 'synthetic_data/synthetic.csv'
     return os.path.exists(path)
 
 
@@ -109,6 +129,7 @@ def main():
 
     # Optional plotting (no recompute required later thanks to cache)
     parser.add_argument('--plot-scatter', action='store_true', help='Save 2D scatter (true color vs cluster marker)')
+    parser.add_argument('--plot-scatter-true-only', action='store_true', help='Save 2D scatter using only true labels (both colour and marker), ignoring clusters')
     parser.add_argument('--plot-timeseries', action='store_true', help='Save monthly label proportions (marks train/test split)')
     parser.add_argument('--plot-future', action='store_true', help='Save future reconstruction overlay by class')
 
@@ -129,7 +150,7 @@ def main():
         args.reduce = cfg['reduce'].get('method', 'umap')
 
     # Decide whether to regenerate
-    need_regen = args.regen_data or (args.data_source in {"lexicon", "llm"} and not synthetic_data_exists(args.data_source))
+    need_regen = args.regen_data or (args.data_source in {'lexicon', 'llm'} and not synthetic_data_exists(args.data_source))
 
     # Standalone regeneration path
     if need_regen and not args.method:
@@ -179,10 +200,15 @@ def main():
     if not isinstance(df['timestamp'].iloc[0], pd.Timestamp):
         df['timestamp'] = pd.to_datetime(df['timestamp'])
 
+    cluster_k = _resolved_cluster_k(args.data_source, df, cfg)
+    configured_k = int(cfg['cluster']['k'])
+    if cluster_k != configured_k:
+        print(f' --> BYOD label set detected {cluster_k} classes; overriding KMeans k from {configured_k} to {cluster_k} (found classes + 1)')
+
     print(' --> Vectorizing -> Clustering -> Reducing ...')
     texts = df['text'].tolist()
     X = _vectorize(args.method, texts, cfg)
-    clabels = _cluster(args.clusterer, X, cfg)
+    clabels = _cluster(args.clusterer, X, cfg, k_override=cluster_k)
     coords2d = _reduce(args.reduce, X, cfg)
 
     # Metrics
@@ -207,37 +233,36 @@ def main():
     os.makedirs(os.path.dirname(metrics_path), exist_ok=True)
 
     row = {
-        "Method": f"{args.method}-lr",
-        "Data": args.data_source,
-        "TrainFrac": args.train_frac,
-        "ARI": m["ARI"],
-        "NMI": m["NMI"],
-        "Silhouette": m["Silhouette"],
-        "LR_Accuracy": s["LR_Accuracy"],
-        "LR_F1_weighted": s["LR_F1_weighted"],
-        "LLM_Accuracy": np.nan,
-        "LLM_F1_weighted": np.nan,
+        'Method': f'{args.method}-lr',
+        'Data': args.data_source,
+        'TrainFrac': args.train_frac,
+        'ARI': m['ARI'],
+        'NMI': m['NMI'],
+        'Silhouette': m['Silhouette'],
+        'LR_Accuracy': s['LR_Accuracy'],
+        'LR_F1_weighted': s['LR_F1_weighted'],
+        'LLM_Accuracy': np.nan,
+        'LLM_F1_weighted': np.nan,
     }
 
     if os.path.exists(metrics_path):
         existing = pd.read_csv(metrics_path)
         updated = pd.concat([existing, pd.DataFrame([row])], ignore_index=True)
     else:
-        header = ["Method", "Data", "TrainFrac", "ARI", "NMI", "Silhouette",
-                  "LR_Accuracy", "LR_F1_weighted", "LLM_Accuracy", "LLM_F1_weighted"]
+        header = ['Method', 'Data', 'TrainFrac', 'ARI', 'NMI', 'Silhouette',
+                  'LR_Accuracy', 'LR_F1_weighted', 'LLM_Accuracy', 'LLM_F1_weighted']
         updated = pd.DataFrame([row], columns=header)
 
     updated.to_csv(metrics_path, index=False)
-    print(f" --> Saved integrated metrics to {metrics_path}")
+    print(f' --> Saved integrated metrics to {metrics_path}')
 
     # Cache run products for later plotting without recompute
     print(' --> Caching run products for later plotting ...')
-    tag = f"{args.data_source}:{args.method}:{args.reduce}:{args.clusterer}:train={args.train_frac}"
+    tag = f'{args.data_source}:{args.method}:{args.reduce}:{args.clusterer}:train={args.train_frac}'
     sig = texts_signature(texts, tag)
     cache_dir = os.path.join('outputs', 'cache')
     os.makedirs(cache_dir, exist_ok=True)
     cache_path = os.path.join(cache_dir, f'run_{sig}.npz')
-    # Coerce to non-object dtypes for pickle-free loading later
     label_names = df['label_name'].astype(str).to_numpy(dtype='U')
     timestamps = df['timestamp'].astype('datetime64[ns]').to_numpy()
     y_pred_u = np.asarray(y_pred, dtype='U')
@@ -252,7 +277,6 @@ def main():
         y_pred=y_pred_u,
         cutoff_ts=df.loc[test_idx, 'timestamp'].min().to_datetime64(),
     )
-    # User-friendly handle for latest run by method+data
     last_path = os.path.join(cache_dir, f'last_{args.data_source}_{args.method}.npz')
     try:
         import shutil
@@ -263,21 +287,27 @@ def main():
     # Optional plotting
     if args.plot_scatter:
         out = os.path.join('outputs', 'figures', f'scatter_{args.method}_{args.data_source}.png')
-        title = f"{args.method.upper()} • {args.data_source}"
+        title = f'{args.method.upper()} • {args.data_source}'
         scatter_2d(coords2d, df, clabels, title, out)
-        print(f" --> Wrote {out}")
+        print(f' --> Wrote {out}')
+
+    if args.plot_scatter_true_only:
+        out = os.path.join('outputs', 'figures', f'scatter_true_only_{args.method}_{args.data_source}.png')
+        title = f'{args.method.upper()} • {args.data_source} • true labels only'
+        scatter_true_only_2d(coords2d, df, title, out)
+        print(f' --> Wrote {out}')
 
     if args.plot_timeseries:
         out = os.path.join('outputs', 'figures', f'timeseries_{args.method}_{args.data_source}.png')
         cutoff = df.loc[test_idx, 'timestamp'].min()
         plot_monthly_label_proportions(df, out, cutoff_timestamp=cutoff)
-        print(f" --> Wrote {out}")
+        print(f' --> Wrote {out}')
 
     if args.plot_future:
         out = os.path.join('outputs', 'figures', f'future_{args.method}_{args.data_source}.png')
-        title = f"Future reconstruction • {args.method.upper()} • {args.data_source}"
+        title = f'Future reconstruction • {args.method.upper()} • {args.data_source}'
         plot_future_reconstruction_by_class(df, test_idx, y_pred, out, title=title)
-        print(f" --> Wrote {out}")
+        print(f' --> Wrote {out}')
 
     print(f"Data: {args.data_source}  Method: {args.method}\n"
           f"ARI={m['ARI']:.3f} NMI={m['NMI']:.3f} Silhouette={m['Silhouette']:.3f}\n"
